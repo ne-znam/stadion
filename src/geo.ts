@@ -41,7 +41,8 @@ export function areaLatLon(ring: LatLon[]): number {
 
 export function centroid(ring: LatLon[]): LatLon {
   // Vertex mean is fine for anchoring; exact polygon centroid isn't needed here.
-  const pts = ring.length > 1 && ring[0][0] === ring.at(-1)![0] && ring[0][1] === ring.at(-1)![1] ? ring.slice(0, -1) : ring
+  const last = ring[ring.length - 1]
+  const pts = ring.length > 1 && ring[0][0] === last[0] && ring[0][1] === last[1] ? ring.slice(0, -1) : ring
   return [pts.reduce((t, p) => t + p[0], 0) / pts.length, pts.reduce((t, p) => t + p[1], 0) / pts.length]
 }
 

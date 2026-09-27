@@ -112,6 +112,19 @@ const basemaps = {
 }
 basemaps.sat.addTo(map)
 
+// If satellite tiles are blocked or failing (some networks/browsers), fall back to streets
+// rather than leaving a blank map.
+let satLoaded = 0
+let satFailed = 0
+basemaps.sat.on('tileload', () => satLoaded++)
+basemaps.sat.on('tileerror', () => {
+  if (++satFailed < 6 || satLoaded > 0 || !map.hasLayer(basemaps.sat)) return
+  basemaps.sat.remove()
+  basemaps.osm.addTo(map)
+  const select = document.querySelector<HTMLSelectElement>('#basemap')
+  if (select) select.value = 'osm'
+})
+
 // Reference drawn from its real coordinates, so it lines up with the imagery exactly.
 const refLayer = L.layerGroup().addTo(map)
 refStadium.outline.forEach((r) =>
@@ -161,7 +174,7 @@ function addOverlay(shape: Shape) {
   }
   o.outlines.forEach((p) => {
     p.bindTooltip(shape.stadium.name, { sticky: true, className: 'tip' })
-    p.on('mousedown', (e: L.LeafletMouseEvent) => startDrag(o, e))
+    p.getElement()?.addEventListener('pointerdown', (ev) => startDrag(o, ev as PointerEvent))
   })
   overlays.set(id, o)
   place(o)
@@ -183,29 +196,42 @@ function applyOpacity() {
   })
 }
 
-// Drag an overlay around the map. Deltas are applied in lat/lon, which is exact enough
-// over a few hundred metres and keeps the shape's metric size fixed (it's re-projected
-// from local metres at the new anchor).
-let drag: { o: Overlay; start: L.LatLng; anchor: LatLon } | null = null
-function startDrag(o: Overlay, e: L.LeafletMouseEvent) {
-  L.DomEvent.stop(e)
-  drag = { o, start: e.latlng, anchor: o.anchor }
+// Drag an overlay around the map with mouse or touch. Deltas are applied in lat/lon, which
+// is exact enough over a few hundred metres and keeps the shape's metric size fixed (it's
+// re-projected from local metres at the new anchor).
+let drag: { o: Overlay; pointerId: number; start: L.LatLng; anchor: LatLon } | null = null
+const activePointers = new Set<number>()
+document.addEventListener('pointerdown', (ev) => activePointers.add(ev.pointerId), true)
+
+function startDrag(o: Overlay, ev: PointerEvent) {
+  // A second finger means pinch-zoom: leave it to the map.
+  if (activePointers.size > 1 || ev.button > 0) return endDrag()
+  ev.preventDefault()
+  ev.stopPropagation()
+  // Pointer events fire before Leaflet's touch/mouse handlers, so disabling here stops the map panning.
   map.dragging.disable()
+  drag = { o, pointerId: ev.pointerId, start: map.mouseEventToLatLng(ev), anchor: o.anchor }
   map.getContainer().classList.add('dragging')
 }
-map.on('mousemove', (e: L.LeafletMouseEvent) => {
-  if (!drag) return
-  drag.o.anchor = [drag.anchor[0] + e.latlng.lat - drag.start.lat, drag.anchor[1] + e.latlng.lng - drag.start.lng]
+document.addEventListener('pointermove', (ev) => {
+  if (!drag || ev.pointerId !== drag.pointerId) return
+  if (activePointers.size > 1) return endDrag()
+  const ll = map.mouseEventToLatLng(ev)
+  drag.o.anchor = [drag.anchor[0] + ll.lat - drag.start.lat, drag.anchor[1] + ll.lng - drag.start.lng]
   place(drag.o)
 })
-const endDrag = () => {
+function endDrag() {
   if (!drag) return
   drag = null
   map.dragging.enable()
   map.getContainer().classList.remove('dragging')
 }
-map.on('mouseup', endDrag)
-document.addEventListener('mouseup', endDrag)
+const releasePointer = (ev: PointerEvent) => {
+  activePointers.delete(ev.pointerId)
+  if (drag && ev.pointerId === drag.pointerId) endDrag()
+}
+document.addEventListener('pointerup', releasePointer)
+document.addEventListener('pointercancel', releasePointer)
 
 // ---------- UI ----------
 
@@ -367,13 +393,23 @@ $('#basemap').addEventListener('change', (e) => {
   Object.values(basemaps).forEach((l) => l.remove())
   basemaps[v].addTo(map)
 })
-$('#panel-toggle').addEventListener('click', () => document.body.classList.toggle('panel-hidden'))
+const isMobile = () => window.matchMedia('(max-width: 720px)').matches
+const togglePanel = () => {
+  document.body.classList.toggle('panel-hidden')
+  if (document.body.classList.contains('panel-hidden')) $('#panel').scrollTop = 0
+}
+$('#panel-toggle').addEventListener('click', togglePanel)
+$('#sheet-handle').addEventListener('click', togglePanel)
 
 function fitToOverlays() {
   const b = L.latLngBounds(refStadium.outline.flat())
   overlays.forEach((o) => o.outlines.forEach((p) => b.extend(p.getBounds())))
-  const panel = document.body.classList.contains('panel-hidden') || window.innerWidth < 720 ? 0 : 380
-  map.flyToBounds(b, { paddingTopLeft: [panel + 24, 24], paddingBottomRight: [24, 24], maxZoom: 18, duration: 0.6 })
+  const hidden = document.body.classList.contains('panel-hidden')
+  const panelRect = $('#panel').getBoundingClientRect()
+  // Desktop: the panel sits on the left. Mobile: it's a bottom sheet.
+  const left = isMobile() || hidden ? 0 : panelRect.right
+  const bottom = isMobile() ? window.innerHeight - panelRect.top : 0
+  map.flyToBounds(b, { paddingTopLeft: [left + 16, 16], paddingBottomRight: [16, bottom + 16], maxZoom: 18, duration: 0.6 })
 }
 
 // ---------- OSM search (Nominatim) ----------
