@@ -96,6 +96,34 @@ function areaM2(ring) {
   return Math.abs(a) / 2
 }
 
+function convexHull(points) {
+  const pts = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+  const lower = []
+  const upper = []
+  for (const p of pts) {
+    while (lower.length > 1 && cross(lower.at(-2), lower.at(-1), p) <= 0) lower.pop()
+    lower.push(p)
+  }
+  for (const p of pts.reverse()) {
+    while (upper.length > 1 && cross(upper.at(-2), upper.at(-1), p) <= 0) upper.pop()
+    upper.push(p)
+  }
+  const ring = lower.slice(0, -1).concat(upper.slice(0, -1))
+  return ring.concat([ring[0]])
+}
+
+// Some leisure=stadium areas cover the whole grounds (car parks, forecourts) with no single
+// building around the pitch, e.g. Celtic Park. When the stands and pitch are mapped, their
+// hull is a far better footprint; for correctly mapped stadiums the two agree within ~10%.
+function tightenOutline(r) {
+  if (r.buildings.length < 3 || !r.pitch) return r
+  const hull = convexHull([...r.pitch, ...r.buildings.flat()])
+  const hullArea = areaM2(hull)
+  if (r.outlineArea < hullArea * 1.6) return r
+  return { ...r, outline: [round(hull)], outlineArea: Math.round(hullArea), outlineSource: 'hull of stands' }
+}
+
 const round = (r) => r.map(([a, b]) => [+a.toFixed(7), +b.toFixed(7)])
 
 function pointInRing([lat, lon], ring) {
@@ -167,18 +195,21 @@ const out = []
 for (const s of STADIUMS) {
   const hit = !force && cached.find((c) => c.id === s.id)
   if (hit) {
-    out.push({ ...hit, ...s })
+    out.push(tightenOutline({ ...hit, ...s }))
     continue
   }
   process.stdout.write(`${s.name}… `)
   try {
-    const r = await fetchStadium(s)
+    const r = tightenOutline(await fetchStadium(s))
     out.push(r)
     mkdirSync('src/data', { recursive: true })
     writeFileSync(OUT, JSON.stringify(out))
     console.log(`${r.osm} "${r.osmName}" outline ${r.outlineArea} m², pitch ${r.pitchArea ?? '—'} m², ${r.buildings.length} buildings`)
   } catch (e) {
-    console.log(`FAILED: ${e.message}`)
+    // Keep the previous data rather than dropping the stadium when a refetch fails.
+    const prev = cached.find((c) => c.id === s.id)
+    if (prev) out.push({ ...prev, ...s })
+    console.log(`FAILED: ${e.message}${prev ? ' (kept cached)' : ''}`)
   }
   await new Promise((r) => setTimeout(r, 1500))
 }
