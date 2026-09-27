@@ -2,6 +2,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import './style.css'
 import rawStadiums from './data/stadiums.json'
+import { t, lang, setLang, locale, stadiumMeta, applyStatic, type Lang } from './i18n'
 import { type LatLon, type XY, toLocal, fromLocal, areaLatLon, centroid, longAxisBearing, dimensions } from './geo'
 
 interface Stadium {
@@ -209,10 +210,12 @@ document.addEventListener('mouseup', endDrag)
 // ---------- UI ----------
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T
-const fmtInt = (n: number) => Math.round(n).toLocaleString('en-US')
-const fmtArea = (m2: number) => (m2 >= 1e6 ? `${(m2 / 1e6).toFixed(2)} km²` : `${fmtInt(m2)} m²`)
+const fmtInt = (n: number) => Math.round(n).toLocaleString(locale())
+const fmtDec = (n: number) => n.toLocaleString(locale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const fmtArea = (m2: number) => (m2 >= 1e6 ? `${fmtDec(m2 / 1e6)} km²` : `${fmtInt(m2)} m²`)
 const ratio = (s: Shape) => s.area / refShape.area
-const fmtRatio = (r: number) => `${r >= 1 ? '×' + r.toFixed(2) : Math.round(r * 100) + '%'}`
+// Croatian orthography puts a space before the percent sign.
+const fmtRatio = (r: number) => (r >= 1 ? `×${fmtDec(r)}` : `${Math.round(r * 100)}${lang === 'hr' ? ' %' : '%'}`)
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 function dimsText(s: Shape) {
@@ -223,13 +226,13 @@ function renderReference() {
   $('#reference').innerHTML = `
     <div class="swatch" style="--c:${DINAMO}"></div>
     <div class="ref-body">
-      <div class="eyebrow">Reference</div>
+      <div class="eyebrow">${t('reference')}</div>
       <div class="name">${esc(refStadium.name)}</div>
-      <div class="meta">${esc(refStadium.club ?? '')}</div>
+      <div class="meta">${esc(stadiumMeta(refStadium.id, refStadium.club))}</div>
       <dl class="stats">
-        <div><dt>Footprint</dt><dd>${fmtArea(refShape.area)}</dd></div>
-        <div><dt>Capacity</dt><dd>${refStadium.capacity ? fmtInt(refStadium.capacity) : '—'}</dd></div>
-        <div><dt>Pitch</dt><dd>${dimsText(refShape)}</dd></div>
+        <div><dt>${t('footprint')}</dt><dd>${fmtArea(refShape.area)}</dd></div>
+        <div><dt>${t('capacity')}</dt><dd>${refStadium.capacity ? fmtInt(refStadium.capacity) : '—'}</dd></div>
+        <div><dt>${t('pitch')}</dt><dd>${dimsText(refShape)}</dd></div>
       </dl>
     </div>`
 }
@@ -237,7 +240,7 @@ function renderReference() {
 function renderActive() {
   const el = $('#active')
   if (!overlays.size) {
-    el.innerHTML = `<p class="empty">Pick a stadium below to lay it over Maksimir.</p>`
+    el.innerHTML = `<p class="empty">${t('empty')}</p>`
     return
   }
   el.innerHTML = [...overlays.values()]
@@ -253,21 +256,21 @@ function renderActive() {
           <div class="ov-top">
             <div>
               <div class="name">${esc(s.stadium.name)}</div>
-              <div class="meta">${esc([s.stadium.club, s.stadium.city].filter(Boolean).join(' · '))}</div>
+              <div class="meta">${esc(stadiumMeta(s.stadium.id, s.stadium.club, s.stadium.city))}</div>
             </div>
-            <div class="big-ratio ${r >= 1 ? 'up' : 'down'}" title="Footprint vs Maksimir">${fmtRatio(r)}</div>
+            <div class="big-ratio ${r >= 1 ? 'up' : 'down'}" title="${t('ratioTitle')}">${fmtRatio(r)}</div>
           </div>
           <dl class="stats">
-            <div><dt>Footprint</dt><dd>${fmtArea(s.area)}</dd></div>
-            <div><dt>Capacity</dt><dd>${cap ? fmtInt(cap) : '—'}${capDiff !== null ? ` <span class="${capDiff >= 0 ? 'up' : 'down'}">${capDiff >= 0 ? '+' : '−'}${fmtInt(Math.abs(capDiff))}</span>` : ''}</dd></div>
-            <div><dt>Pitch</dt><dd>${dimsText(s)}</dd></div>
+            <div><dt>${t('footprint')}</dt><dd>${fmtArea(s.area)}</dd></div>
+            <div><dt>${t('capacity')}</dt><dd>${cap ? fmtInt(cap) : '—'}${capDiff !== null ? ` <span class="${capDiff >= 0 ? 'up' : 'down'}">${capDiff >= 0 ? '+' : '−'}${fmtInt(Math.abs(capDiff))}</span>` : ''}</dd></div>
+            <div><dt>${t('pitch')}</dt><dd>${dimsText(s)}</dd></div>
           </dl>
           <div class="controls">
-            <label class="rot"><span>Rotate <output>${o.rotation}°</output></span>
+            <label class="rot"><span>${t('rotate')} <output>${o.rotation}°</output></span>
               <input type="range" min="-180" max="180" step="1" value="${o.rotation}" data-act="rotate" />
             </label>
-            <button data-act="reset" title="Snap back onto Maksimir's pitch">Re-centre</button>
-            <button data-act="remove" class="ghost" title="Remove overlay">✕</button>
+            <button data-act="reset" title="${t('recentreTitle')}">${t('recentre')}</button>
+            <button data-act="remove" class="ghost" title="${t('remove')}">✕</button>
           </div>
         </div>
       </div>`
@@ -294,15 +297,15 @@ function renderLibrary() {
         <button class="lib-item">
           <span class="dot"></span>
           <span class="lib-text">
-            <span class="name">${esc(s.stadium.name)}${s.stadium.custom ? ' <em>custom</em>' : ''}</span>
-            <span class="meta">${esc([s.stadium.club, s.stadium.city].filter(Boolean).join(' · '))}</span>
+            <span class="name">${esc(s.stadium.name)}${s.stadium.custom ? ` <em>${t('custom')}</em>` : ''}</span>
+            <span class="meta">${esc(stadiumMeta(s.stadium.id, s.stadium.club, s.stadium.city))}</span>
           </span>
           <span class="lib-num">
             <span>${fmtRatio(ratio(s))}</span>
             <span class="meta">${s.stadium.capacity ? fmtInt(s.stadium.capacity) : fmtArea(s.area)}</span>
           </span>
         </button>
-        ${s.stadium.custom ? `<button class="del ghost" data-act="delete" title="Delete custom area">✕</button>` : ''}
+        ${s.stadium.custom ? `<button class="del ghost" data-act="delete" title="${t('deleteCustom')}">✕</button>` : ''}
       </li>`
     })
     .join('')
@@ -400,9 +403,9 @@ $('#search-form').addEventListener('submit', async (e) => {
   const q = $<HTMLInputElement>('#q').value.trim()
   const list = $('#search-results')
   if (!q) return
-  list.innerHTML = `<li class="status">Searching…</li>`
+  list.innerHTML = `<li class="status">${t('searching')}</li>`
   try {
-    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&polygon_geojson=1&extratags=1&limit=8&q=${encodeURIComponent(q)}`
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&polygon_geojson=1&extratags=1&limit=8&accept-language=${lang}&q=${encodeURIComponent(q)}`
     const res = await fetch(url, { headers: { Accept: 'application/json' } })
     const all: NominatimResult[] = await res.json()
     searchResults = all.filter((r) => geojsonRings(r.geojson).length)
@@ -413,9 +416,9 @@ $('#search-form').addEventListener('submit', async (e) => {
             <span class="meta">${esc(r.type)} · ${esc(r.display_name.split(',').slice(1, 3).join(',').trim())} · ${fmtArea(geojsonRings(r.geojson).reduce((t, x) => t + areaLatLon(x), 0))}</span></button></li>`,
           )
           .join('')
-      : `<li class="status">No areas found (only results with a polygon outline can be overlaid).</li>`
+      : `<li class="status">${t('noResults')}</li>`
   } catch {
-    list.innerHTML = `<li class="status">Search failed — check your connection.</li>`
+    list.innerHTML = `<li class="status">${t('searchFailed')}</li>`
   }
 })
 
@@ -451,7 +454,7 @@ $('#search-results').addEventListener('click', (e) => {
 
 function syncHash() {
   const parts = [...overlays.values()].map((o) => o.shape.stadium.id + (o.rotation ? `@${o.rotation}` : ''))
-  history.replaceState(null, '', parts.length ? `#s=${parts.join(',')}` : location.pathname)
+  history.replaceState(null, '', location.pathname + location.search + (parts.length ? `#s=${parts.join(',')}` : ''))
 }
 
 function restoreHash() {
@@ -473,6 +476,16 @@ function restoreHash() {
   return overlays.size > 0
 }
 
+document.querySelectorAll<HTMLButtonElement>('[data-lang]').forEach((b) =>
+  b.addEventListener('click', () => {
+    setLang(b.dataset.lang as Lang)
+    applyStatic()
+    renderReference()
+    render()
+  }),
+)
+
+applyStatic()
 renderReference()
 const DEFAULT_OVERLAYS = ['camp-nou', 'allianz']
 if (!restoreHash()) DEFAULT_OVERLAYS.forEach((id) => {

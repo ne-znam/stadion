@@ -17,6 +17,7 @@
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="Camp Nou and Allianz Arena outlines overlaid on Stadion Maksimir on satellite imagery" />
     <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="hr_HR" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Stadium Overlay — how big is Camp Nou compared to Maksimir?" />
     <meta name="twitter:description" content="True-scale footprints of the world's stadiums laid over Stadion Maksimir, Zagreb." />
@@ -30,8 +31,13 @@
     <div id="map"></div>
     <aside id="panel">
       <header>
-        <h1>Stadium Overlay</h1>
-        <p class="sub">True-scale footprints laid over <strong>Stadion Maksimir</strong>, Zagreb</p>
+        <div class="head-row">
+          <h1 data-i18n="title">Stadium Overlay</h1>
+          <div class="lang" role="group" aria-label="Language / Jezik">
+            <button data-lang="en" aria-pressed="true">EN</button><button data-lang="hr" aria-pressed="false">HR</button>
+          </div>
+        </div>
+        <p class="sub" data-i18n-html="subtitle">True-scale footprints laid over <strong>Stadion Maksimir</strong>, Zagreb</p>
       </header>
 
       <section id="reference" class="card ref"></section>
@@ -39,35 +45,35 @@
       <section id="active"></section>
 
       <section class="search">
-        <label for="q">Add any stadium or area from OpenStreetMap</label>
+        <label for="q" data-i18n="searchLabel">Add any stadium or area from OpenStreetMap</label>
         <form id="search-form">
-          <input id="q" type="search" placeholder="e.g. Estadio da Luz, Hyde Park…" autocomplete="off" />
-          <button type="submit">Search</button>
+          <input id="q" type="search" placeholder="e.g. Estádio da Luz, Hyde Park…" data-i18n-placeholder="searchPlaceholder" autocomplete="off" />
+          <button type="submit" data-i18n="search">Search</button>
         </form>
         <ul id="search-results"></ul>
       </section>
 
       <section class="library">
         <div class="lib-head">
-          <h2>Stadiums</h2>
+          <h2 data-i18n="stadiums">Stadiums</h2>
           <select id="sort">
-            <option value="area">Sort: footprint</option>
-            <option value="capacity">Sort: capacity</option>
-            <option value="name">Sort: name</option>
+            <option value="area" data-i18n="sortArea">Sort: footprint</option>
+            <option value="capacity" data-i18n="sortCapacity">Sort: capacity</option>
+            <option value="name" data-i18n="sortName">Sort: name</option>
           </select>
         </div>
         <ul id="library"></ul>
       </section>
 
       <footer>
-        <label class="row"><span>Overlay opacity</span><input id="opacity" type="range" min="0.1" max="0.9" step="0.05" value="0.35" /></label>
-        <label class="row"><span>Basemap</span>
-          <select id="basemap"><option value="sat">Satellite</option><option value="osm">Streets</option></select>
+        <label class="row"><span data-i18n="opacity">Overlay opacity</span><input id="opacity" type="range" min="0.1" max="0.9" step="0.05" value="0.35" /></label>
+        <label class="row"><span data-i18n="basemap">Basemap</span>
+          <select id="basemap"><option value="sat" data-i18n="satellite">Satellite</option><option value="osm" data-i18n="streets">Streets</option></select>
         </label>
-        <p class="hint">Drag an overlay to move it. Footprint data © OpenStreetMap contributors.</p>
+        <p class="hint" data-i18n="hint">Drag an overlay to move it. Footprint data © OpenStreetMap contributors.</p>
       </footer>
     </aside>
-    <button id="panel-toggle" aria-label="Toggle panel">☰</button>
+    <button id="panel-toggle" aria-label="Toggle panel" data-i18n-aria="togglePanel">☰</button>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
